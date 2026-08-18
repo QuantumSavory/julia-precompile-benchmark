@@ -16,7 +16,17 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
+      - uses: julia-actions/setup-julia@v3
+        with:
+          version: '1.12.6'
       - name: Check shell syntax
-        run: bash -n run-benchmark.sh test/run-benchmark.sh test/fixture-workspace/head/benchmark/precompile/run.sh
-      - name: Test benchmark invocation
-        run: test/run-benchmark.sh
+        run: bash -n build-release.sh run.sh test/integration.sh
+      - name: Parse Julia tools and fixture
+        run: |
+          julia --startup-file=no --history-file=no -e '
+              for path in ARGS
+                  Meta.parseall(read(path, String); filename = path)
+              end
+          ' scenario-driver.jl summarize.jl test/fixture/src/PrecompileBenchmarkFixture.jl test/fixture/benchmark/precompile/scenarios.jl
+      - name: Run the fixture comparison and release checks
+        run: test/integration.sh
