@@ -35,10 +35,8 @@ benchmark_environment=(
     "${prefix}_PRECOMPILE_BUILDS=$builds"
     "${prefix}_PRECOMPILE_SAMPLES=$samples"
     "${prefix}_PRECOMPILE_SCENARIOS=$scenarios"
+    "${prefix}_PRECOMPILE_EXTRA_SCENARIOS=$extra_scenarios"
 )
-if [[ -n $extra_scenarios ]]; then
-    benchmark_environment+=("${prefix}_PRECOMPILE_EXTRA_SCENARIOS=$extra_scenarios")
-fi
 
 env "${benchmark_environment[@]}" \
     "$benchmark" \

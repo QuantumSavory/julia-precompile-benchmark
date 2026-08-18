@@ -25,6 +25,12 @@ mapfile -t output < "$capture_file"
 [[ ${output[3]} == 'extra_scenarios=head=third' ]]
 [[ ${output[4]} == "arguments=$expected_arguments" ]]
 
+export TEST_PRECOMPILE_EXTRA_SCENARIOS=ambient
+export INPUT_EXTRA_SCENARIOS=
+"$repository_root/run-benchmark.sh"
+mapfile -t output < "$capture_file"
+[[ ${output[3]} == 'extra_scenarios=' ]]
+
 if INPUT_ENVIRONMENT_PREFIX=invalid-prefix "$repository_root/run-benchmark.sh" 2> "$error_file"; then
     echo "invalid environment-prefix unexpectedly succeeded" >&2
     exit 1
