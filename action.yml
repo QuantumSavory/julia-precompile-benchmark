@@ -1,0 +1,77 @@
+name: Julia precompile benchmark
+description: Compare Julia precompilation latency between a pull request base and head
+author: QuantumSavory
+
+branding:
+  icon: clock
+  color: blue
+
+inputs:
+  environment-prefix:
+    description: Prefix for the package-specific PRECOMPILE environment variables
+    required: true
+  scenarios:
+    description: Comma-separated benchmark scenarios
+    required: true
+  extra-scenarios:
+    description: Comma-separated LABEL=SCENARIO entries that run only for selected variants
+    required: false
+    default: ''
+  julia-version:
+    description: Julia version used by the benchmark harness
+    required: false
+    default: '1.12.6'
+  builds:
+    description: Number of independent package-cache builds
+    required: false
+    default: '2'
+  samples:
+    description: Number of fresh-process samples per scenario and build
+    required: false
+    default: '5'
+
+runs:
+  using: composite
+  steps:
+    - name: Check out the pull request base
+      uses: actions/checkout@v7
+      with:
+        repository: ${{ github.event.pull_request.base.repo.full_name }}
+        ref: ${{ github.event.pull_request.base.sha }}
+        path: base
+        persist-credentials: false
+
+    - name: Check out the pull request head
+      uses: actions/checkout@v7
+      with:
+        repository: ${{ github.event.pull_request.head.repo.full_name }}
+        ref: ${{ github.event.pull_request.head.sha }}
+        path: head
+        persist-credentials: false
+
+    - name: Set up Julia
+      uses: julia-actions/setup-julia@v3
+      with:
+        version: ${{ inputs.julia-version }}
+
+    - name: Measure cold-start latency
+      shell: bash
+      env:
+        INPUT_ENVIRONMENT_PREFIX: ${{ inputs.environment-prefix }}
+        INPUT_BUILDS: ${{ inputs.builds }}
+        INPUT_SAMPLES: ${{ inputs.samples }}
+        INPUT_SCENARIOS: ${{ inputs.scenarios }}
+        INPUT_EXTRA_SCENARIOS: ${{ inputs.extra-scenarios }}
+      run: "$GITHUB_ACTION_PATH/run-benchmark.sh"
+
+    - name: Add comparison to the job summary
+      if: always() && hashFiles('cold-start-results/summary.md') != ''
+      shell: bash
+      run: cat cold-start-results/summary.md >> "$GITHUB_STEP_SUMMARY"
+
+    - name: Upload raw results
+      if: always() && hashFiles('cold-start-results/**') != ''
+      uses: actions/upload-artifact@v7
+      with:
+        name: cold-start-results
+        path: cold-start-results

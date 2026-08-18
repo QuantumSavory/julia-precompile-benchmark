@@ -1,0 +1,22 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Check shell syntax
+        run: bash -n run-benchmark.sh test/run-benchmark.sh test/fixture-workspace/head/benchmark/precompile/run.sh
+      - name: Test benchmark invocation
+        run: test/run-benchmark.sh
