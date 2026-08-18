@@ -37,10 +37,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 120
     steps:
-      - uses: QuantumSavory/julia-precompile-benchmark@v1
-        with:
-          environment-prefix: EXAMPLE
-          scenarios: first_use,second_use
+      - uses: QuantumSavory/julia-precompile-benchmark@v2
 ```
 
 The path filter belongs to the caller because GitHub Actions cannot define the
@@ -52,9 +49,6 @@ run it.
 
 | Input | Required | Default | Description |
 | --- | --- | --- | --- |
-| `environment-prefix` | yes | | Prefix used for `<PREFIX>_PRECOMPILE_*` variables |
-| `scenarios` | yes | | Comma-separated scenario names understood by the package harness |
-| `extra-scenarios` | no | empty | Comma-separated `LABEL=SCENARIO` entries for selected variants |
 | `julia-version` | no | `1.12.6` | Julia version used for the comparison |
 | `builds` | no | `2` | Independent package-cache builds |
 | `samples` | no | `5` | Fresh-process samples per scenario and build |
@@ -66,10 +60,10 @@ benchmark/precompile/run.sh RESULTS BASE=CHECKOUT HEAD=CHECKOUT
 ```
 
 The harness must be executable. It must write `summary.md` and any raw data
-under the supplied results directory. The benchmark controls are passed as
-`<PREFIX>_PRECOMPILE_BUILDS`, `<PREFIX>_PRECOMPILE_SAMPLES`,
-`<PREFIX>_PRECOMPILE_SCENARIOS`, and, when set,
-`<PREFIX>_PRECOMPILE_EXTRA_SCENARIOS`.
+under the supplied results directory. The action passes repetition controls as
+`PRECOMPILE_BENCHMARK_BUILDS` and `PRECOMPILE_BENCHMARK_SAMPLES`. The package
+harness owns its ordered `PRECOMPILE_BENCHMARKS` registry and runs every
+registered benchmark; callers do not select scenarios through the action.
 
 Use this action only from `pull_request` workflows. The action executes the
 head revision's benchmark script, so callers should grant only read access to

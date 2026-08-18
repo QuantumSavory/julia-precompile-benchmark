@@ -7,16 +7,6 @@ branding:
   color: blue
 
 inputs:
-  environment-prefix:
-    description: Prefix for the package-specific PRECOMPILE environment variables
-    required: true
-  scenarios:
-    description: Comma-separated benchmark scenarios
-    required: true
-  extra-scenarios:
-    description: Comma-separated LABEL=SCENARIO entries that run only for selected variants
-    required: false
-    default: ''
   julia-version:
     description: Julia version used by the benchmark harness
     required: false
@@ -57,11 +47,8 @@ runs:
     - name: Measure cold-start latency
       shell: bash
       env:
-        INPUT_ENVIRONMENT_PREFIX: ${{ inputs.environment-prefix }}
         INPUT_BUILDS: ${{ inputs.builds }}
         INPUT_SAMPLES: ${{ inputs.samples }}
-        INPUT_SCENARIOS: ${{ inputs.scenarios }}
-        INPUT_EXTRA_SCENARIOS: ${{ inputs.extra-scenarios }}
       run: "$GITHUB_ACTION_PATH/run-benchmark.sh"
 
     - name: Add comparison to the job summary
