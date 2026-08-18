@@ -92,7 +92,6 @@ Its main environment controls are:
 - `PRECOMPILE_BENCHMARK_CONSUMER_PROJECT` and
   `PRECOMPILE_BENCHMARK_CONSUMER_MANIFEST`, set together to reuse a normalized
   environment from an earlier run
-- `PRECOMPILE_BENCHMARK_TRACE`, set to `compile` or `dispatch`
 - `PRECOMPILE_BENCHMARK_KEEP_TMP=1` to retain the temporary environment
 
 `PRECOMPILE_BENCHMARK_ALLOW_DIRTY=1` and

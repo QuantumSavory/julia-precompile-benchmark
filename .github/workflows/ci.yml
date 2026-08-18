@@ -13,10 +13,10 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
-      - uses: julia-actions/setup-julia@v3
+      - uses: julia-actions/setup-julia@fa02766e078afaaf09b14210362cee14137e6a32 # v3
         with:
           version: '1.12.6'
       - name: Check shell syntax
@@ -27,6 +27,6 @@ jobs:
               for path in ARGS
                   Meta.parseall(read(path, String); filename = path)
               end
-          ' scenario-driver.jl summarize.jl test/fixture/src/PrecompileBenchmarkFixture.jl test/fixture/benchmark/precompile/scenarios.jl
+          ' scenario-driver.jl summarize.jl test/fixture/src/PrecompileBenchmarkFixture.jl test/fixture/lib/FixtureSupport/src/FixtureSupport.jl test/fixture/benchmark/precompile/scenarios.jl
       - name: Run the fixture comparison and release checks
         run: test/integration.sh

@@ -1,5 +1,7 @@
 module PrecompileBenchmarkFixture
 
-increment(value) = value + 1
+using FixtureSupport
+
+increment(value) = FixtureSupport.increment(value)
 
 end

@@ -12,7 +12,7 @@ git -C "$checkout" init --quiet
 git -C "$checkout" config user.email benchmark@example.invalid
 git -C "$checkout" config user.name "Benchmark test"
 git -C "$checkout" add .
-git -C "$checkout" commit --quiet -m "Add fixture package"
+git -C "$checkout" -c commit.gpgsign=false commit --quiet -m "Add fixture package"
 
 assert_results() {
     local output_dir=$1
@@ -35,8 +35,12 @@ assert_results() {
     grep -Fxq 'builds=1' "$output_dir/metadata.txt"
     grep -Fxq 'recorded_samples_per_build=1' "$output_dir/metadata.txt"
     grep -Fxq "consumer_environment_mode=$expected_mode" "$output_dir/metadata.txt"
+    grep -Fxq 'variant.base.source.FixtureSupport.path=lib/FixtureSupport' "$output_dir/metadata.txt"
+    grep -Fxq 'variant.head.source.FixtureSupport.path=lib/FixtureSupport' "$output_dir/metadata.txt"
     grep -Fxq '# PrecompileBenchmarkFixture cold-start summary' "$output_dir/summary.md"
-    grep -Fq '__JULIA_PRECOMPILE_BENCHMARK_CHECKOUT__' "$output_dir/consumer-Manifest.toml"
+    [[ $(grep -Fc 'path = "__JULIA_PRECOMPILE_BENCHMARK_CHECKOUT__"' "$output_dir/consumer-Manifest.toml") == 1 ]]
+    [[ $(grep -Fc 'path = "__JULIA_PRECOMPILE_BENCHMARK_CHECKOUT__/lib/FixtureSupport"' "$output_dir/consumer-Manifest.toml") == 1 ]]
+    ! grep -Eq 'path = "/(home|tmp)/' "$output_dir/consumer-Manifest.toml"
 }
 
 export PRECOMPILE_BENCHMARK_BUILDS=1
@@ -73,8 +77,8 @@ grep -Fq 'PRECOMPILE_BENCHMARK_BUILDS must be a positive integer' "$error_path"
 
 first_release="$temporary_root/release-one"
 second_release="$temporary_root/release-two"
-"$repository_root/build-release.sh" "$first_release"
-"$repository_root/build-release.sh" "$second_release"
+(umask 0022; "$repository_root/build-release.sh" "$first_release")
+(umask 0077; "$repository_root/build-release.sh" "$second_release")
 archive_name="julia-precompile-benchmark-v$(<"$repository_root/VERSION").tar.gz"
 cmp -- "$first_release/$archive_name" "$second_release/$archive_name"
 (

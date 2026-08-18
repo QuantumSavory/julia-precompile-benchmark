@@ -32,7 +32,7 @@ done
 temporary_root=$(mktemp -d)
 trap 'rm -rf -- "$temporary_root"' EXIT
 package_root="$temporary_root/$package_name"
-mkdir -- "$package_root"
+install -d -m 0755 -- "$package_root"
 
 regular_files=(LICENSE README.md VERSION scenario-driver.jl summarize.jl)
 executable_files=(run.sh)
