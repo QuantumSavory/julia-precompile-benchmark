@@ -1,0 +1,9 @@
+name = "PrecompileBenchmarkFixture"
+uuid = "e773d02a-f1dd-4c17-a73f-b23944fe0ce8"
+version = "0.1.0"
+
+[deps]
+FixtureSupport = "79dbac63-b73e-46ce-8dd9-6c288d254ca7"
+
+[sources]
+FixtureSupport = {path = "lib/FixtureSupport"}
