@@ -7,10 +7,6 @@ branding:
   color: blue
 
 inputs:
-  julia-version:
-    description: Julia version used by the benchmark harness
-    required: false
-    default: '1.12.6'
   builds:
     description: Number of independent package-cache builds
     required: false
@@ -23,6 +19,16 @@ inputs:
 runs:
   using: composite
   steps:
+    - name: Validate the event
+      shell: bash
+      env:
+        EVENT_NAME: ${{ github.event_name }}
+      run: |
+        [[ $EVENT_NAME == pull_request ]] || {
+          echo "julia-precompile-benchmark supports only pull_request workflows" >&2
+          exit 2
+        }
+
     - name: Check out the pull request base
       uses: actions/checkout@v7
       with:
@@ -42,14 +48,21 @@ runs:
     - name: Set up Julia
       uses: julia-actions/setup-julia@v3
       with:
-        version: ${{ inputs.julia-version }}
+        version: '1.12.6'
 
     - name: Measure cold-start latency
       shell: bash
       env:
-        INPUT_BUILDS: ${{ inputs.builds }}
-        INPUT_SAMPLES: ${{ inputs.samples }}
-      run: "$GITHUB_ACTION_PATH/run-benchmark.sh"
+        PRECOMPILE_BENCHMARK_BUILDS: ${{ inputs.builds }}
+        PRECOMPILE_BENCHMARK_SAMPLES: ${{ inputs.samples }}
+        PRECOMPILE_BENCHMARK_HARNESS_REPOSITORY: ${{ github.action_repository }}
+        PRECOMPILE_BENCHMARK_HARNESS_REF: ${{ github.action_ref }}
+      run: |
+        "$GITHUB_ACTION_PATH/run.sh" \
+          "$GITHUB_WORKSPACE/head/benchmark/precompile/scenarios.jl" \
+          "$GITHUB_WORKSPACE/cold-start-results" \
+          "base=$GITHUB_WORKSPACE/base" \
+          "head=$GITHUB_WORKSPACE/head"
 
     - name: Add comparison to the job summary
       if: always() && hashFiles('cold-start-results/summary.md') != ''
