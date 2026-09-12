@@ -149,6 +149,7 @@ reuse_consumer_project=${PRECOMPILE_BENCHMARK_CONSUMER_PROJECT:-}
 reuse_consumer_manifest=${PRECOMPILE_BENCHMARK_CONSUMER_MANIFEST:-}
 allow_dirty=${PRECOMPILE_BENCHMARK_ALLOW_DIRTY:-0}
 allow_julia_mismatch=${PRECOMPILE_BENCHMARK_ALLOW_JULIA_MISMATCH:-0}
+skip_dependency_changes=${PRECOMPILE_BENCHMARK_SKIP_DEPENDENCY_CHANGES:-0}
 julia=${JULIA:-julia}
 expected_julia='julia version 1.12.6'
 token_pattern='^[A-Za-z0-9][A-Za-z0-9_.-]*$'
@@ -158,6 +159,7 @@ mapping_list_pattern='^[A-Za-z0-9][A-Za-z0-9_.-]*=[A-Za-z0-9][A-Za-z0-9_.-]*(,[A
 [[ $samples =~ ^[1-9][0-9]*$ ]] || { echo "PRECOMPILE_BENCHMARK_SAMPLES must be a positive integer" >&2; exit 2; }
 [[ $allow_dirty == 0 || $allow_dirty == 1 ]] || { echo "PRECOMPILE_BENCHMARK_ALLOW_DIRTY must be 0 or 1" >&2; exit 2; }
 [[ $allow_julia_mismatch == 0 || $allow_julia_mismatch == 1 ]] || { echo "PRECOMPILE_BENCHMARK_ALLOW_JULIA_MISMATCH must be 0 or 1" >&2; exit 2; }
+[[ $skip_dependency_changes == 0 || $skip_dependency_changes == 1 ]] || { echo "PRECOMPILE_BENCHMARK_SKIP_DEPENDENCY_CHANGES must be 0 or 1" >&2; exit 2; }
 [[ -z $baseline_map_list || $baseline_map_list =~ $mapping_list_pattern ]] || {
     echo "PRECOMPILE_BENCHMARK_BASELINES must be a comma-separated CANDIDATE=BASELINE list" >&2
     exit 2
@@ -452,6 +454,56 @@ project_identity() {
     ' "$1"
 }
 
+dependency_metadata_changed() {
+    local project_path=$1
+    if [[ $skip_dependency_changes == 1 ]]; then
+        printf '%s\n' \
+            '# Cold-start comparison skipped' \
+            '' \
+            "The variants have different dependency metadata in $project_path." \
+            'The benchmark requires identical dependencies to compare code under one shared environment.' \
+            'No latency measurements were collected.' > "$markdown_path"
+        cat "$markdown_path" >&2
+        exit 0
+    fi
+    echo "all variants must use identical $project_path dependency metadata" >&2
+    exit 1
+}
+
+for mapping_index in "${!baseline_candidates[@]}"; do
+    baseline_candidate=${baseline_candidates[$mapping_index]}
+    baseline_label=${baseline_labels[$mapping_index]}
+    candidate_known=false
+    baseline_known=false
+    for label in "${labels[@]}"; do
+        [[ $label == "$baseline_candidate" ]] && candidate_known=true
+        [[ $label == "$baseline_label" ]] && baseline_known=true
+    done
+    $candidate_known || {
+        echo "baseline map refers to an unknown candidate label: $baseline_candidate" >&2
+        exit 2
+    }
+    $baseline_known || {
+        echo "baseline map refers to an unknown baseline label: $baseline_label" >&2
+        exit 2
+    }
+    [[ $baseline_candidate != "${labels[0]}" ]] || {
+        echo "the first variant cannot be a mapped candidate: $baseline_candidate" >&2
+        exit 2
+    }
+    [[ $baseline_candidate != "$baseline_label" ]] || {
+        echo "a candidate cannot be its own baseline: $baseline_candidate" >&2
+        exit 2
+    }
+    for previous_index in "${!baseline_candidates[@]}"; do
+        [[ $previous_index -ge $mapping_index ]] && break
+        [[ ${baseline_candidates[$previous_index]} != "$baseline_candidate" ]] || {
+            echo "duplicate baseline map for candidate: $baseline_candidate" >&2
+            exit 2
+        }
+    done
+done
+
 for index in "${!labels[@]}"; do
     checkout=${checkouts[$index]}
     [[ $(project_identity "$checkout/Project.toml") == "$package_name"$'\t'"$package_uuid" ]] || {
@@ -469,6 +521,18 @@ for index in "${!labels[@]}"; do
         exit 1
     fi
     checkout_state_sha256s+=("$(checkout_state_sha256 "$checkout")")
+done
+
+for checkout in "${checkouts[@]:1}"; do
+    cmp -s -- \
+        <(sed '1,/^\[/ { /^version = /d; }' "${checkouts[0]}/Project.toml") \
+        <(sed '1,/^\[/ { /^version = /d; }' "$checkout/Project.toml") || {
+        dependency_metadata_changed Project.toml
+    }
+done
+
+for index in "${!labels[@]}"; do
+    checkout=${checkouts[$index]}
     for source_index in "${!source_names[@]}"; do
         source_name=${source_names[$source_index]}
         source_uuid=${source_uuids[$source_index]}
@@ -512,56 +576,15 @@ verify_checkout() {
 }
 
 for checkout in "${checkouts[@]:1}"; do
-    cmp -s -- \
-        <(sed '1,/^\[/ { /^version = /d; }' "${checkouts[0]}/Project.toml") \
-        <(sed '1,/^\[/ { /^version = /d; }' "$checkout/Project.toml") || {
-        echo "all variants must use identical Project.toml dependency metadata" >&2
-        exit 1
-    }
     for source_index in "${!source_names[@]}"; do
         source_path=${source_paths[$source_index]}
         cmp -s -- \
             <(sed '1,/^\[/ { /^version = /d; }' "${checkouts[0]}/$source_path/Project.toml") \
             <(sed '1,/^\[/ { /^version = /d; }' "$checkout/$source_path/Project.toml") || {
-            echo "all variants must use identical $source_path/Project.toml dependency metadata" >&2
-            exit 1
+            dependency_metadata_changed "$source_path/Project.toml"
         }
     done
 done
-for mapping_index in "${!baseline_candidates[@]}"; do
-    baseline_candidate=${baseline_candidates[$mapping_index]}
-    baseline_label=${baseline_labels[$mapping_index]}
-    candidate_known=false
-    baseline_known=false
-    for label in "${labels[@]}"; do
-        [[ $label == "$baseline_candidate" ]] && candidate_known=true
-        [[ $label == "$baseline_label" ]] && baseline_known=true
-    done
-    $candidate_known || {
-        echo "baseline map refers to an unknown candidate label: $baseline_candidate" >&2
-        exit 2
-    }
-    $baseline_known || {
-        echo "baseline map refers to an unknown baseline label: $baseline_label" >&2
-        exit 2
-    }
-    [[ $baseline_candidate != "${labels[0]}" ]] || {
-        echo "the first variant cannot be a mapped candidate: $baseline_candidate" >&2
-        exit 2
-    }
-    [[ $baseline_candidate != "$baseline_label" ]] || {
-        echo "a candidate cannot be its own baseline: $baseline_candidate" >&2
-        exit 2
-    }
-    for previous_index in "${!baseline_candidates[@]}"; do
-        [[ $previous_index -ge $mapping_index ]] && break
-        [[ ${baseline_candidates[$previous_index]} != "$baseline_candidate" ]] || {
-            echo "duplicate baseline map for candidate: $baseline_candidate" >&2
-            exit 2
-        }
-    done
-done
-
 candidate_baseline_indices=()
 for ((candidate_index = 1; candidate_index < ${#labels[@]}; candidate_index++)); do
     baseline_index=0
