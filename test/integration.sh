@@ -54,6 +54,7 @@ first_results="$temporary_root/first-results"
 assert_results "$first_results" resolved
 
 second_results="$temporary_root/second-results"
+PRECOMPILE_BENCHMARK_SKIP_DEPENDENCY_CHANGES=1 \
 PRECOMPILE_BENCHMARK_CONSUMER_PROJECT="$first_results/consumer-Project.toml" \
 PRECOMPILE_BENCHMARK_CONSUMER_MANIFEST="$first_results/consumer-Manifest.toml" \
     "$repository_root/run.sh" \
@@ -64,7 +65,7 @@ PRECOMPILE_BENCHMARK_CONSUMER_MANIFEST="$first_results/consumer-Manifest.toml" \
 assert_results "$second_results" reused
 
 error_path="$temporary_root/error.txt"
-if PRECOMPILE_BENCHMARK_BUILDS=0 \
+if PRECOMPILE_BENCHMARK_SKIP_DEPENDENCY_CHANGES=1 PRECOMPILE_BENCHMARK_BUILDS=0 \
     "$repository_root/run.sh" \
         "$checkout/benchmark/precompile/scenarios.jl" \
         "$temporary_root/invalid-results" \
@@ -74,6 +75,51 @@ if PRECOMPILE_BENCHMARK_BUILDS=0 \
     exit 1
 fi
 grep -Fq 'PRECOMPILE_BENCHMARK_BUILDS must be a positive integer' "$error_path"
+
+# Dependency updates cannot use the shared benchmark environment. The CLI
+# rejects them, while the action reports a skip without producing measurements.
+for change in Project.toml lib/FixtureSupport/Project.toml source-path; do
+    changed_checkout="$temporary_root/changed-${change//\//-}"
+    git clone --quiet -- "$checkout" "$changed_checkout"
+    project_path=$change
+    if [[ $change == source-path ]]; then
+        project_path=Project.toml
+        git -C "$changed_checkout" mv lib/FixtureSupport lib/RenamedSupport
+        sed -i 's@lib/FixtureSupport@lib/RenamedSupport@' "$changed_checkout/Project.toml"
+    else
+        printf '\n[compat]\njulia = "1.12"\n' >> "$changed_checkout/$project_path"
+    fi
+    git -C "$changed_checkout" -c user.name='Benchmark test' -c user.email=benchmark@example.invalid \
+        -c commit.gpgsign=false commit --quiet -am 'Change dependency metadata'
+    changed_results="$changed_checkout-results"
+    if "$repository_root/run.sh" \
+        "$changed_checkout/benchmark/precompile/scenarios.jl" \
+        "$changed_results" \
+        "base=$checkout" "head=$changed_checkout" 2> "$error_path"; then
+        echo "dependency metadata change unexpectedly succeeded" >&2
+        exit 1
+    fi
+    grep -Fq "all variants must use identical $project_path dependency metadata" "$error_path"
+    PRECOMPILE_BENCHMARK_SKIP_DEPENDENCY_CHANGES=1 \
+        "$repository_root/run.sh" \
+            "$changed_checkout/benchmark/precompile/scenarios.jl" \
+            "$changed_results" \
+            "base=$checkout" "head=$changed_checkout"
+    [[ $(find "$changed_results" -type f -printf '%f\n') == summary.md ]]
+    grep -Fxq '# Cold-start comparison skipped' "$changed_results/summary.md"
+    grep -Fq "$project_path" "$changed_results/summary.md"
+    grep -Fxq 'No latency measurements were collected.' "$changed_results/summary.md"
+done
+
+if PRECOMPILE_BENCHMARK_SKIP_DEPENDENCY_CHANGES=1 PRECOMPILE_BENCHMARK_BASELINES=head=missing \
+    "$repository_root/run.sh" \
+        "$changed_checkout/benchmark/precompile/scenarios.jl" \
+        "$temporary_root/invalid-baseline-results" \
+        "base=$checkout" "head=$changed_checkout" 2> "$error_path"; then
+    echo "invalid baseline unexpectedly succeeded" >&2
+    exit 1
+fi
+grep -Fq 'baseline map refers to an unknown baseline label: missing' "$error_path"
 
 first_release="$temporary_root/release-one"
 second_release="$temporary_root/release-two"

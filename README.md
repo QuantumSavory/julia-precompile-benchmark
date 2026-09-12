@@ -42,6 +42,12 @@ The caller owns the trigger because an action cannot define workflow events.
 The example therefore runs for every change under `ext`, `src`, or
 `benchmark/precompile`, as well as dependency and workflow changes.
 
+When dependency metadata differs between the variants, the action reports a
+skipped comparison in the job summary and collects no latency measurements.
+Comparisons require identical dependencies so that both revisions run under
+one shared environment. Package version changes alone do not skip a comparison.
+Other benchmark errors still fail the action.
+
 The action uses Julia 1.12.6. Its optional `builds` and `samples` inputs default
 to two independent package-cache builds and five fresh-process measurements per
 scenario and build.
@@ -97,6 +103,10 @@ Its main environment controls are:
 `PRECOMPILE_BENCHMARK_ALLOW_DIRTY=1` and
 `PRECOMPILE_BENCHMARK_ALLOW_JULIA_MISMATCH=1` are available for non-reportable
 smoke runs.
+
+The local runner rejects dependency metadata changes by default. Set
+`PRECOMPILE_BENCHMARK_SKIP_DEPENDENCY_CHANGES=1` to use the action's behavior:
+exit successfully with only a `summary.md` explaining the skipped comparison.
 
 Each successful comparison writes `raw.tsv`, `summary.tsv`,
 `build-summary.tsv`, `summary.md`, `metadata.txt`, `consumer-Project.toml`, and
